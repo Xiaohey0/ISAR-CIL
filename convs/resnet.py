@@ -4,10 +4,7 @@ https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py
 '''
 import torch
 import torch.nn as nn
-try:
-    from torchvision.models.utils import load_state_dict_from_url
-except:
-    from torch.hub import load_state_dict_from_url
+from torch.hub import load_state_dict_from_url
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -177,7 +174,21 @@ class ResNet(nn.Module):
                     nn.ReLU(inplace=True),
                     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
                 )
-
+        elif 'isar' in args['dataset']:
+            if args["init_cls"] == args["increment"]:
+                self.conv1 = nn.Sequential(
+                    nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False),
+                    nn.BatchNorm2d(self.inplanes),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                )
+            else:
+                self.conv1 = nn.Sequential(
+                    nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1, bias=False),
+                    nn.BatchNorm2d(self.inplanes),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                )
 
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
@@ -262,10 +273,54 @@ class ResNet(nn.Module):
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
     model = ResNet(block, layers, **kwargs)
+    
     if pretrained:
-        state_dict = load_state_dict_from_url(model_urls[arch],
-                                              progress=progress)
-        model.load_state_dict(state_dict)
+        state_dict = None
+        
+        # 情况 A: pretrained 是布尔值 True -> 自动下载官方 ImageNet 权重
+        if isinstance(pretrained, bool) and pretrained:
+            print("Downloading/Loading standard ResNet18 weights...")
+            # ResNet18 的官方权重地址
+            url = "https://download.pytorch.org/models/resnet18-f37072fd.pth"
+            try:
+                # 尝试下载或从缓存加载
+                state_dict = load_state_dict_from_url(url, progress=progress)
+            except Exception as e:
+                print(f"Error downloading weights: {e}")
+                print("Please check your internet or manually provide the path.")
+                return model # 下载失败就直接返回随机初始化的模型
+        
+        # 情况 B: pretrained 是一个字符串路径 -> 加载本地文件
+        elif isinstance(pretrained, str):
+            print(f"Loading weights from local file: {pretrained}")
+            state_dict = torch.load(pretrained)
+            
+        # 情况 C: pretrained 已经是字典了 (较少见)
+        elif isinstance(pretrained, dict):
+            state_dict = pretrained
+
+        # === 核心过滤逻辑 (解决你上一个报错的关键) ===
+        if state_dict is not None:
+            model_dict = model.state_dict()
+            
+            # 1. 过滤掉不匹配的 Key (比如 conv1, fc 等)
+            # 只有当 Key 存在且形状(Shape)完全一致时才加载
+            pretrained_dict = {
+                k: v for k, v in state_dict.items() 
+                if k in model_dict and v.shape == model_dict[k].shape
+            }
+            
+            # 打印一下加载情况，让你心里有数
+            print(f"Loaded {len(pretrained_dict)}/{len(model_dict)} layers from pretrained weights.")
+            
+            # 2. 更新当前模型参数
+            model_dict.update(pretrained_dict)
+            
+            # 3. 加载 (strict=False 是必须的，因为我们要允许部分参数缺失)
+            model.load_state_dict(model_dict, strict=False)
+        else:
+            print("Warning: 'pretrained' was True but no state_dict was loaded.")
+
     return model
 
 def resnet10(pretrained=False, progress=True, **kwargs):

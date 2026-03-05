@@ -7,6 +7,8 @@ from utils.data import iCIFAR10, iCIFAR100, iImageNet100, iImageNet1000, iCIFAR1
 from tqdm import tqdm
 import torch
 
+from utils.data import iISAR
+
 class DataManager(object):
     def __init__(self, dataset_name, shuffle, seed, init_cls, increment, aug=1):
         self.dataset_name = dataset_name
@@ -199,6 +201,9 @@ class DataManager(object):
         self._test_trsf = idata.test_trsf
         self._common_trsf = idata.common_trsf
 
+        self.classes = idata.classes
+        self.class_to_idx = idata.class_to_idx
+        
         # Order
         order = [i for i in range(len(np.unique(self._train_targets)))]
         if shuffle:
@@ -279,7 +284,9 @@ def _map_new_class_index(y, order):
 
 def _get_idata(dataset_name):
     name = dataset_name.lower()
-    if name == "cifar10":
+    if name == "isar":
+        return iISAR()
+    elif name == "cifar10":
         return iCIFAR10()
     elif name == "cifar100":
         return iCIFAR100()
@@ -313,13 +320,13 @@ def accimage_loader(path):
     accimage is an accelerated Image loader and preprocessor leveraging Intel IPP.
     accimage is available on conda-forge.
     """
-    import accimage
+    # import accimage
 
-    try:
-        return accimage.Image(path)
-    except IOError:
-        # Potentially a decoding problem, fall back to PIL.Image
-        return pil_loader(path)
+    # try:
+    #     return accimage.Image(path)
+    # except IOError:
+    #     # Potentially a decoding problem, fall back to PIL.Image
+    return pil_loader(path)
 
 
 def default_loader(path):

@@ -1,6 +1,12 @@
 def get_model(model_name, args):
     name = model_name.lower()
-    if name == "icarl":
+    if name == "acil_spec_branch":
+        from models.acil_spec_branch import ACIL_Spec_Branch
+        return ACIL_Spec_Branch(args)
+    elif name == "acil_spec_branch_resnet":
+        from models.acil_spec_branch_resnet import ACIL_Spec_Branch_Resnet
+        return ACIL_Spec_Branch_Resnet(args)
+    elif name == "icarl":
         from models.icarl import iCaRL
         return iCaRL(args)
     elif name == "bic":

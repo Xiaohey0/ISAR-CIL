@@ -17,10 +17,14 @@ from convs.ACL_buffer import RandomBuffer, activation_t
 from convs.linears import RecursiveLinear
 from typing import Dict, Any
 
+from convs.commom_branch import ISARConv4
+from convs.sub_branch import TaskMLP
 
 def get_convnet(args, pretrained=False):
     name = args["convnet_type"].lower()
-    if name == "resnet32":
+    if name == "isarconv4":
+        return ISARConv4(args)
+    elif name == "resnet32":
         return resnet32()
     elif name == "resnet18":
         return resnet18(pretrained=pretrained,args=args)
@@ -66,7 +70,7 @@ class BaseNet(nn.Module):
 
     @property
     def feature_dim(self):
-        return self.convnet.out_dim
+        return self.convnet.out_dim_for_buffer
 
     def extract_vector(self, x):
         return self.convnet(x)["features"]
@@ -118,6 +122,149 @@ class BaseNet(nn.Module):
         self.fc.load_state_dict(model_infos['fc'])
         test_acc = model_infos['test_acc']
         return test_acc
+    
+class Task_Spec_1(BaseNet):
+    def __init__(
+            self,
+            args,
+            buffer_size=4096,
+            gamma=0.1,
+            pretrained=False,
+            device=None,
+            dtype=torch.double,
+        ) -> None:
+        super().__init__(args, pretrained)
+        self.args = args
+        self.convnet = self.convnet.to(device, non_blocking=True)
+        self.buffer_size = buffer_size
+        self.gamma = gamma
+        self.device = device
+        self.dtype = dtype
+
+        self.adapter_list = nn.ModuleList()
+        self.sub_fusion_mode = args.get("sub_fusion_mode", "cat")
+
+    @torch.no_grad()
+    def forward(self, X: torch.Tensor):
+        features = self.convnet(X)["fmaps"]
+        # X = features[-1] # [B, 64, 8, 8] 不使用 Buffer
+        # X_flat = X.view(X.shape[0], -1) # [B, 4096]
+
+        X = self.convnet(X)["features"] # 使用 Buffer
+        X_flat = self.buffer(X)
+        logits = self.fc(X_flat)["logits"]
+        return {
+            "logits": logits,
+            "features": features,
+        }
+        
+    def update_adapter(self, out_dim):
+        self.adapter_list.append(TaskMLP(
+            args=self.args,
+            device=self.device, 
+            out_dim=out_dim,
+        ).to(device=self.device))
+
+    def update_fc(self, nb_classes: int) -> None:
+        self.fc.update_fc(nb_classes)
+
+    def generate_fc(self, *_) -> None:
+        self.fc = RecursiveLinear(
+            in_features=self.buffer_size,
+            gamma=self.gamma,
+            bias=False,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+    def generate_buffer(self) -> None:
+        self.buffer = RandomBuffer(
+            self.feature_dim, self.buffer_size, device=self.device, dtype=self.dtype
+        )
+
+    def after_task(self) -> None:
+        self.fc.after_task()
+
+    @torch.no_grad()
+    def fit(self, X: torch.Tensor, y: torch.Tensor) -> None:
+        # X = self.convnet(X)["fmaps"][-1] # 不使用 Buffer
+        # X = X.view(X.shape[0], -1)
+        X = self.convnet(X)["features"] # 使用 Buffer
+        X = self.buffer(X)
+        
+        Y: torch.Tensor = torch.nn.functional.one_hot(y, self.fc.out_features)
+        self.fc.fit(X, Y)
+
+class Task_Spec_Resnet(BaseNet):
+    def __init__(
+            self,
+            args,
+            buffer_size=4096,
+            gamma=0.1,
+            pretrained=False,
+            device=None,
+            dtype=torch.double,
+        ) -> None:
+        super().__init__(args, pretrained)
+        self.args = args
+        self.convnet = self.convnet.to(device, non_blocking=True)
+        self.buffer_size = buffer_size
+        self.gamma = gamma
+        self.device = device
+        self.dtype = dtype
+
+        self.adapter_list = nn.ModuleList()
+        self.sub_fusion_mode = args.get("sub_fusion_mode", "cat")
+
+    @torch.no_grad()
+    def forward(self, X: torch.Tensor):
+        features = self.convnet(X)["fmaps"]
+        X = features[-1]
+        X = nn.functional.adaptive_avg_pool2d(X, (1, 1))
+        X_flat = X.view(X.shape[0], -1)
+        logits = self.fc(X_flat)["logits"]
+        return {
+            "logits": logits,
+            "features": features,
+        }
+        
+    def update_adapter(self, out_dim):
+        self.adapter_list.append(TaskMLP(
+            args=self.args,
+            device=self.device, 
+            out_dim=out_dim,
+        ).to(device=self.device))
+
+    def update_fc(self, nb_classes: int) -> None:
+        self.fc.update_fc(nb_classes)
+
+    def generate_fc(self, *_) -> None:
+        self.fc = RecursiveLinear(
+            in_features=getattr(self.convnet, 'out_dim', 512),
+            gamma=self.gamma,
+            bias=False,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+    def generate_buffer(self) -> None:
+        self.buffer = RandomBuffer(
+            self.feature_dim, self.buffer_size, device=self.device, dtype=self.dtype
+        )
+
+    def after_task(self) -> None:
+        self.fc.after_task()
+
+    @torch.no_grad()
+    def fit(self, X: torch.Tensor, y: torch.Tensor) -> None:
+        X = self.convnet(X)["fmaps"][-1] # 不使用 Buffer
+        X = nn.functional.adaptive_avg_pool2d(X, (1, 1))
+        X = X.view(X.shape[0], -1)
+        # X = self.convnet(X)["features"] # 使用 Buffer
+        # X = self.buffer(X)
+        
+        Y: torch.Tensor = torch.nn.functional.one_hot(y, self.fc.out_features)
+        self.fc.fit(X, Y)
 
 class IncrementalNet(BaseNet):
     def __init__(self, args, pretrained, gradcam=False):

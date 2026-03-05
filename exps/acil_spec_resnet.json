@@ -1,0 +1,52 @@
+{
+    "comment_text1": "data config",
+    "dataset_name": "isar",
+    "dataset": "isar",
+    "shuffle": false,
+    "seed": [2025],
+    "init_cls": 6,
+    "increment": 4,
+    "num_workers": 4,
+    "init_batch_size": 128,
+    "IL_batch_size": 256,
+    "inplace_repeat": 1,
+    "aug": 1,
+
+    "comment_text2": "net config",
+    "convnet_type": "resnet18",
+    "buffer_size": 4096,
+    "x_dim": 3,
+    "commom_hid_dim": [64, 128, 256, 512],
+    "commom_out_dim": 512,
+    "sub_hid_dim": [64, 64, 64],
+    "sub_mlp_mode": "fc1",
+    "sub_fusion_mode": "cat",
+    "sub_feature_dim": 256,
+    "memory_size": 0,
+    "unsupervision_pretrain": true,
+    "gamma": 0.1,
+    "train_eval_freq": 1,
+    "logits_thr": 0,
+    "draw_heatmap": true,
+
+    "model_name": "acil_spec_branch_resnet",
+    "prefix": "acil_spec_branch_resnet",
+    "device": ["0"],
+
+    "configurations": {        
+        "isar": {
+            "buffer_size": 4096,
+            "gamma": 0.1,
+            "init_weight_decay": 5e-4,
+            "scheduler": {                       
+                "type": "MultiStep",
+                "init_lr": 0.005,
+                "init_epochs": 30,
+                "warmup": 0,
+                "milestones": [9, 18, 24],    
+                "decay": 0.1
+            }
+        }
+    }
+    
+}

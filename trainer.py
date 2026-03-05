@@ -22,14 +22,14 @@ def train(args):
 def _train(args):
 
     init_cls = 0 if args ["init_cls"] == args["increment"] else args["init_cls"]
-    logs_name = "logs/{}/{}/{}/{}".format(args["model_name"],args["dataset"], init_cls, args['increment'])
+    logs_name = "logs/{}/{}/{}/{}".format(args["model_name"],args["dataset_name"], init_cls, args['increment'])
     
     if not os.path.exists(logs_name):
         os.makedirs(logs_name)
 
     logfilename = "logs/{}/{}/{}/{}/{}_{}_{}".format(
         args["model_name"],
-        args["dataset"],
+        args["dataset_name"],
         init_cls,
         args["increment"],
         args["prefix"],
@@ -49,7 +49,7 @@ def _train(args):
     _set_device(args)
     print_args(args)
     data_manager = DataManager(
-        args["dataset"],
+        args["dataset_name"],
         args["shuffle"],
         args["seed"],
         args["init_cls"],
@@ -111,10 +111,10 @@ def _train(args):
             cnn_matrix.append(cnn_values)
 
             cnn_curve["top1"].append(cnn_accy["top1"])
-            cnn_curve["top5"].append(cnn_accy["top5"])
+            # cnn_curve["top5"].append(cnn_accy["top5"])
 
             logging.info("CNN top1 curve: {}".format(cnn_curve["top1"]))
-            logging.info("CNN top5 curve: {}\n".format(cnn_curve["top5"]))
+            # logging.info("CNN top5 curve: {}\n".format(cnn_curve["top5"]))
 
             print('Average Accuracy (CNN):', sum(cnn_curve["top1"])/len(cnn_curve["top1"]))
             logging.info("Average Accuracy (CNN): {}".format(sum(cnn_curve["top1"])/len(cnn_curve["top1"])))

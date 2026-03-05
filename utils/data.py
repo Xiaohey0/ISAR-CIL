@@ -4,12 +4,65 @@ from utils.toolkit import split_images_labels
 from . import autoaugment
 from . import ops
 
+from typing import List
+from torchvision.datasets import ImageFolder
+
 class iData(object):
     train_trsf = []
     test_trsf = []
     common_trsf = []
     class_order = None
 
+class iISAR(iData):
+    use_path = True
+    train_trsf = [
+        transforms.CenterCrop(224),
+        transforms.Resize((128, 128)),
+    ]
+    test_trsf = [
+        transforms.CenterCrop(224),
+        transforms.Resize((128, 128)),
+    ]
+    common_trsf = [
+        transforms.ToTensor(),
+    ]
+
+    class_order = [
+        30, 0, 11, 16, 9, 6,
+        21, 13, 5, 10,
+        27, 32, 20, 2,
+        7, 15, 26, 29,
+        14, 31, 18, 28,
+        24, 33, 4, 12,
+        17, 22, 1, 3,
+        23, 8, 25, 19
+    ]
+
+    def download_data(self):
+        train_dir = [
+            "./data/isar/50_2GHz",
+        ]
+        test_dir = [
+            "./data/isar/55_2GHz",
+        ]
+
+        train_dset = ImageFolderConcat(train_dir) #允许训练数据分散在多个不同的文件夹里 这里只写了一个
+        test_dset = ImageFolderConcat(test_dir)
+
+        self.classes = train_dset.classes
+        self.class_to_idx = train_dset.class_to_idx
+
+        self.train_data, self.train_targets = split_images_labels(train_dset.imgs) # 分别取出图片路径和标签
+        self.test_data, self.test_targets = split_images_labels(test_dset.imgs)
+
+class ImageFolderConcat(ImageFolder):
+    def __init__(self, root: List[str]):
+        data_list = [ImageFolder(path) for path in root]
+        self.classes = data_list[0].classes # 路径只写了一个 所以这里取[0] 按顺序返回所有类名
+        self.class_to_idx = data_list[0].class_to_idx # 给所有类对应的顺序索引
+        self.imgs = [] # [路径 标签]
+        for data in data_list:
+            self.imgs.extend(data.imgs)
 
 class iCIFAR10(iData):
     use_path = False
