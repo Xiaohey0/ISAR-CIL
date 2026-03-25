@@ -1,15 +1,4 @@
 # ISAR-CIL
-# ISAR-CIL
-
-<p align="center">
-  <img src="resources/logo_v2.png" alt="ISAR-CIL logo" width="220">
-</p>
-
-
-<p align="center">
-  A class-incremental learning framework for ISAR target recognition.
-</p>
-
 
 `ISAR-CIL` is a configuration-driven project for `ISAR (Inverse Synthetic Aperture Radar)` class-incremental learning. It integrates multiple continual learning baselines and includes a custom ACIL-style method with task-specific adapter branches for more stable incremental recognition on ISAR imagery.
 
